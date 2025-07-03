@@ -8,6 +8,11 @@ app = Flask(__name__)
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
 
+# === ROOT ENDPOINT TO AVOID 404 ON RENDER ===
+@app.route('/')
+def index():
+    return "✅ Nova AI Webhook is running."
+
 # === ROUTE TO RECEIVE SIGNAL FROM TRADINGVIEW ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
