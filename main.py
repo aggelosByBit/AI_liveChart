@@ -1,35 +1,39 @@
 from flask import Flask, request, jsonify
-import csv
+import requests
 import os
-from datetime import datetime
 
 app = Flask(__name__)
-LOG_FILE = "trade_log.csv"
 
-@app.route("/")
-def home():
-    return "Nova AI Flask backend is running."
+# === TELEGRAM BOT SETTINGS ===
+BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
+CHAT_ID = "-1002526774762"
 
-@app.route("/log-signal", methods=["POST"])
-def log_signal():
-    data = request.json
+# === ROUTE TO RECEIVE SIGNAL FROM TRADINGVIEW ===
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
     if not data:
-        return jsonify({"status": "fail", "message": "No JSON received"}), 400
+        return jsonify({'error': 'No JSON payload received'}), 400
 
-    # Append signal to CSV
-    with open(LOG_FILE, mode="a", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            data.get("symbol", ""),
-            data.get("timeframe", ""),
-            data.get("type", ""),
-            data.get("entry", ""),
-            data.get("tp", ""),
-            data.get("sl", "")
-        ])
+    message = f"📈 Signal Received:\n\n{data}"
+    send_telegram_message(message)
+    return jsonify({'status': 'ok'}), 200
 
-    return jsonify({"status": "success", "message": "Signal logged."}), 200
+# === FUNCTION TO SEND MESSAGE TO TELEGRAM ===
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+    try:
+        response = requests.post(url, json=payload)
+        return response.json()
+    except Exception as e:
+        print("Telegram error:", e)
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+# === PORT BINDING FOR RENDER ===
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
