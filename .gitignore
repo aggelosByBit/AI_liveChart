@@ -1,3 +1,30 @@
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+env/
+venv/
+ENV/
+.venv/
+
+# VSCode/IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Secrets
 .env
+
+# Logs
+*.log
+
+# Compiled files
+*.so
+
+# CSVs/logs you don't want public
+trade_log.csv
