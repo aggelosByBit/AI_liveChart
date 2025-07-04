@@ -8,10 +8,6 @@ app = Flask(__name__)
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
 
-# === DEFAULT TP/SL SETTINGS ===
-DEFAULT_TP = "0.8%"
-DEFAULT_SL = "0.5%"
-
 # === ROOT ENDPOINT TO AVOID 404 ON RENDER ===
 @app.route('/')
 def index():
@@ -26,14 +22,16 @@ def webhook():
 
     print("✅ Received Webhook Data:", data)
 
+    # === Extract and sanitize data ===
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "0%")
     timestamp = data.get("timestamp", "Unknown")
-    tp = data.get("TP", DEFAULT_TP)
-    sl = data.get("SL", DEFAULT_SL)
+    price = data.get("price", "N/A")
+    tp = data.get("TP", "0.8%")
+    sl = data.get("SL", "0.5%")
 
-    # Parse confidence as number
+    # === Validate confidence threshold ===
     try:
         confidence_value = float(confidence.replace('%', '').strip())
     except:
@@ -41,13 +39,14 @@ def webhook():
 
     if confidence_value >= 80:
         message = f"""
-📊 *Nova Signal Alert*
+📉 *New Signal From Nova AI*
 
 • *Symbol*: `{symbol}`
 • *Type*: *{signal_type}*
 • *Confidence*: *{confidence}*
-• *Time*: `{timestamp}`
+• *Entry Price*: `${price}`
 • *TP*: `{tp}` | *SL*: `{sl}`
+• *Time*: `{timestamp}`
 
 🧠 _Signal accepted by Nova Core (≥80% confidence)_
 """
@@ -57,7 +56,7 @@ def webhook():
 
     return jsonify({'status': 'ok'}), 200
 
-# === SEND TELEGRAM MESSAGE ===
+# === FUNCTION TO SEND MESSAGE TO TELEGRAM ===
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
