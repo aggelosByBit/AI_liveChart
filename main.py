@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
+from logger import log_signal  # ✅ Import the logger
 
 app = Flask(__name__)
 
@@ -38,6 +39,10 @@ def webhook():
         confidence_value = 0
 
     if confidence_value >= 80:
+        # ✅ Log to CSV
+        log_signal(data)
+
+        # ✅ Format and send message
         message = f"""
 📉 *New Signal From Nova AI*
 
