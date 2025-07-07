@@ -40,7 +40,7 @@ def webhook():
     except:
         confidence_value = 0
 
-    # === Build response message ===
+    # === Build Telegram Message ===
     if confidence_value >= 80:
         message = f"""
 📉 *New Signal From Nova AI*
@@ -56,7 +56,7 @@ def webhook():
 """
         send_telegram_message(message)
 
-        # === Save to log (non-blocking) ===
+        # === Save to log ===
         save_trade_to_log({
             "symbol": symbol,
             "type": signal_type,
