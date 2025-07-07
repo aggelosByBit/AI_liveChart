@@ -1,13 +1,15 @@
 from flask import Flask, request, jsonify
 import requests
 import os
-from logger import log_signal  # ✅ Import the logger
+import json
+from datetime import datetime
 
 app = Flask(__name__)
 
 # === TELEGRAM BOT SETTINGS ===
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
+LOG_FILE = "trade_log.json"
 
 # === ROOT ENDPOINT TO AVOID 404 ON RENDER ===
 @app.route('/')
@@ -27,7 +29,7 @@ def webhook():
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "0%")
-    timestamp = data.get("timestamp", "Unknown")
+    timestamp = data.get("timestamp", datetime.utcnow().isoformat())
     price = data.get("price", "N/A")
     tp = data.get("TP", "0.8%")
     sl = data.get("SL", "0.5%")
@@ -38,11 +40,8 @@ def webhook():
     except:
         confidence_value = 0
 
+    # === Build response message ===
     if confidence_value >= 80:
-        # ✅ Log to CSV
-        log_signal(data)
-
-        # ✅ Format and send message
         message = f"""
 📉 *New Signal From Nova AI*
 
@@ -56,6 +55,17 @@ def webhook():
 🧠 _Signal accepted by Nova Core (≥80% confidence)_
 """
         send_telegram_message(message)
+
+        # === Save to log (non-blocking) ===
+        save_trade_to_log({
+            "symbol": symbol,
+            "type": signal_type,
+            "confidence": confidence,
+            "price": price,
+            "tp": tp,
+            "sl": sl,
+            "timestamp": timestamp
+        })
     else:
         print("❌ Signal rejected (below confidence threshold)")
 
@@ -75,6 +85,21 @@ def send_telegram_message(message):
         return response.json()
     except Exception as e:
         print("Telegram error:", e)
+
+# === FUNCTION TO SAVE TRADES ===
+def save_trade_to_log(trade_data):
+    try:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE, 'r') as f:
+                log = json.load(f)
+        else:
+            log = []
+        log.append(trade_data)
+        with open(LOG_FILE, 'w') as f:
+            json.dump(log, f, indent=2)
+        print("✅ Trade saved to log.")
+    except Exception as e:
+        print("Log write error:", e)
 
 # === PORT BINDING FOR RENDER ===
 if __name__ == '__main__':
