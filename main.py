@@ -3,13 +3,13 @@ import requests
 import os
 import json
 from datetime import datetime
+from logger import log_signal  # Import the logger
 
 app = Flask(__name__)
 
 # === TELEGRAM BOT SETTINGS ===
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
-LOG_FILE = "trade_log.json"
 
 # === ROOT ENDPOINT TO AVOID 404 ON RENDER ===
 @app.route('/')
@@ -56,7 +56,7 @@ def webhook():
 """
         send_telegram_message(message)
 
-        # === Save to log ===
+        # === Save to log (console via log_signal)
         save_trade_to_log({
             "symbol": symbol,
             "type": signal_type,
@@ -86,20 +86,21 @@ def send_telegram_message(message):
     except Exception as e:
         print("Telegram error:", e)
 
-# === FUNCTION TO SAVE TRADES ===
+# === FUNCTION TO LOG TRADES (Render-friendly) ===
 def save_trade_to_log(trade_data):
     try:
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, 'r') as f:
-                log = json.load(f)
-        else:
-            log = []
-        log.append(trade_data)
-        with open(LOG_FILE, 'w') as f:
-            json.dump(log, f, indent=2)
-        print("✅ Trade saved to log.")
+        log_signal({
+            "timestamp": trade_data.get("timestamp"),
+            "type": trade_data.get("type"),
+            "symbol": trade_data.get("symbol"),
+            "price": trade_data.get("price"),
+            "confidence": trade_data.get("confidence"),
+            "TP": trade_data.get("tp"),
+            "SL": trade_data.get("sl"),
+        })
+        print("✅ Trade logged successfully.")
     except Exception as e:
-        print("Log write error:", e)
+        print("❌ Logging failed:", e)
 
 # === PORT BINDING FOR RENDER ===
 if __name__ == '__main__':
