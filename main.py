@@ -29,10 +29,20 @@ def webhook():
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "0%")
-    timestamp = data.get("timestamp", datetime.utcnow().isoformat())
     price = data.get("price", "N/A")
     tp = data.get("TP", "0.8%")
     sl = data.get("SL", "0.5%")
+
+    # === Safe timestamp formatting ===
+    raw_timestamp = data.get("timestamp")
+    try:
+        if raw_timestamp:
+            dt = datetime.fromisoformat(raw_timestamp)
+        else:
+            dt = datetime.utcnow()
+    except:
+        dt = datetime.utcnow()
+    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
     # === Validate confidence threshold ===
     try:
