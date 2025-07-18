@@ -11,12 +11,16 @@ app = Flask(__name__)
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
 
-# === ROOT ENDPOINT (health check) ===
+# === AI BRAIN SETTINGS ===
+AI_BRAIN_URL = "https://1d901c6e-e756-47a9-a5c5-98809de105a7-00-3supnbl570r0e.janeway.replit.dev/webhook"
+AI_TIMEOUT = 5
+
+# === ROOT ENDPOINT ===
 @app.route('/')
 def index():
-    return "✅ Nova AI Webhook is running."
+    return "✅ Nova AI Webhook (Render) is live."
 
-# === WEBHOOK: Receives signal from TradingView ===
+# === MAIN WEBHOOK ENDPOINT ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -27,15 +31,11 @@ def webhook():
 
     # === STEP 1: Forward to AI Brain ===
     try:
-        ai_response = requests.post(
-            "https://1d901c6e-e756-47a9-a5c5-98809de105a7-00-3supnbl570r0e.janeway.replit.dev/webhook",
-            json=data,
-            timeout=5
-        )
+        ai_response = requests.post(AI_BRAIN_URL, json=data, timeout=AI_TIMEOUT)
         ai_json = ai_response.json()
         print("🧠 AI Response:", ai_json)
     except Exception as e:
-        print("❌ Failed to connect to AI Brain:", e)
+        print("❌ Failed to reach AI Brain:", str(e))
         return jsonify({"error": "AI Brain unreachable"}), 502
 
     # === STEP 2: Check AI Decision ===
@@ -43,7 +43,7 @@ def webhook():
         print("❌ Signal rejected by AI Brain.")
         return jsonify({"status": "rejected by AI"}), 200
 
-    # === STEP 3: Extract + Sanitize Data ===
+    # === STEP 3: Extract + Format Signal ===
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "0%")
@@ -51,7 +51,6 @@ def webhook():
     tp = data.get("TP", "0.8%")
     sl = data.get("SL", "0.5%")
 
-    # === Format Timestamp ===
     raw_timestamp = data.get("timestamp")
     try:
         dt = datetime.fromisoformat(raw_timestamp) if raw_timestamp else datetime.utcnow()
@@ -59,7 +58,7 @@ def webhook():
         dt = datetime.utcnow()
     timestamp = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # === STEP 4: Send to Telegram ===
+    # === STEP 4: Build and Send Telegram Message ===
     message = f"""
 📉 *New Signal From Nova AI*
 
@@ -74,7 +73,7 @@ def webhook():
 """
     send_telegram_message(message)
 
-    # === STEP 5: Log It ===
+    # === STEP 5: Save to Local Log ===
     save_trade_to_log({
         "symbol": symbol,
         "type": signal_type,
@@ -100,9 +99,9 @@ def send_telegram_message(message):
         print("✅ Telegram response:", response.status_code, response.text)
         return response.json()
     except Exception as e:
-        print("❌ Telegram error:", e)
+        print("❌ Telegram send error:", str(e))
 
-# === LOG SIGNAL ===
+# === LOG LOCALLY ===
 def save_trade_to_log(trade_data):
     try:
         log_signal({
@@ -116,9 +115,9 @@ def save_trade_to_log(trade_data):
         })
         print("✅ Trade logged successfully.")
     except Exception as e:
-        print("❌ Logging failed:", e)
+        print("❌ Logging failed:", str(e))
 
-# === PORT BINDING FOR RENDER ===
+# === BIND PORT FOR RENDER ===
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
