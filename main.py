@@ -20,20 +20,7 @@ AI_TIMEOUT = 5
 def index():
     return "✅ Nova AI Webhook (Render) is live."
 
-# === FINAL ENDPOINT ===
-@app.route("/final", methods=["POST"])
-def final():
-    try:
-        data = request.get_json()
-        print("✅ FINAL Signal Received:", data)
-
-        # You can forward to Telegram here if needed
-        return jsonify({"status": "received by final endpoint"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# === MAIN WEBHOOK ENDPOINT ===
+# === MAIN WEBHOOK: Receives signal from TradingView and forwards to AI Brain ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -42,7 +29,7 @@ def webhook():
 
     print("✅ Received Webhook Data:", data)
 
-    # === STEP 1: Forward to AI Brain ===
+    # === STEP 1: Forward to AI Brain (Replit) ===
     try:
         ai_response = requests.post(AI_BRAIN_URL, json=data, timeout=AI_TIMEOUT)
         ai_json = ai_response.json()
@@ -56,24 +43,33 @@ def webhook():
         print("❌ Signal rejected by AI Brain.")
         return jsonify({"status": "rejected by AI"}), 200
 
-    # === STEP 3: Extract + Format Signal ===
+    # === STEP 3: Forward to /final if approved ===
+    try:
+        final_response = requests.post("http://localhost:5000/final", json=data)
+        print("➡️ Forwarded to /final:", final_response.status_code)
+    except Exception as e:
+        print("❌ Failed to forward to /final:", str(e))
+
+    return jsonify({"status": "forwarded to /final"}), 200
+
+# === FINAL ENDPOINT: Sends signal to Telegram after AI approval ===
+@app.route('/final', methods=['POST'])
+def final_telegram_forward():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data received'}), 400
+
+    # Extract and format message
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
-    confidence = data.get("confidence", "0%")
+    confidence = data.get("confidence", "N/A")
     price = data.get("price", "N/A")
-    tp = data.get("TP", "0.8%")
-    sl = data.get("SL", "0.5%")
+    tp = data.get("TP", "N/A")
+    sl = data.get("SL", "N/A")
+    timestamp = data.get("timestamp", "Unknown")
 
-    raw_timestamp = data.get("timestamp")
-    try:
-        dt = datetime.fromisoformat(raw_timestamp) if raw_timestamp else datetime.utcnow()
-    except:
-        dt = datetime.utcnow()
-    timestamp = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-    # === STEP 4: Build and Send Telegram Message ===
     message = f"""
-📉 *New Signal From Nova AI*
+📉 *Nova AI Verified Signal*
 
 • *Symbol*: `{symbol}`
 • *Type*: *{signal_type}*
@@ -82,22 +78,16 @@ def webhook():
 • *TP*: `{tp}` | *SL*: `{sl}`
 • *Time*: `{timestamp}`
 
-🧠 _Signal approved by AI Core_
+✅ _Forwarded by AI Core_
 """
+
+    # Send to Telegram
     send_telegram_message(message)
 
-    # === STEP 5: Save to Local Log ===
-    save_trade_to_log({
-        "symbol": symbol,
-        "type": signal_type,
-        "confidence": confidence,
-        "price": price,
-        "tp": tp,
-        "sl": sl,
-        "timestamp": timestamp
-    })
+    # Optional logging
+    save_trade_to_log(data)
 
-    return jsonify({"status": "forwarded by AI"}), 200
+    return jsonify({"status": "forwarded to Telegram"}), 200
 
 # === SEND TO TELEGRAM ===
 def send_telegram_message(message):
@@ -134,40 +124,3 @@ def save_trade_to_log(trade_data):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-    
-# === FINAL FORWARD ENDPOINT (for AI-approved signals) ===
-@app.route('/final', methods=['POST'])
-def final_telegram_forward():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data received'}), 400
-
-    # Extract and format message
-    symbol = data.get("symbol", "Unknown")
-    signal_type = data.get("type", "Unknown").upper()
-    confidence = data.get("confidence", "N/A")
-    price = data.get("price", "N/A")
-    tp = data.get("TP", "N/A")
-    sl = data.get("SL", "N/A")
-    timestamp = data.get("timestamp", "Unknown")
-
-    message = f"""
-📉 *Nova AI Verified Signal*
-
-• *Symbol*: `{symbol}`
-• *Type*: *{signal_type}*
-• *Confidence*: *{confidence}*
-• *Entry Price*: `${price}`
-• *TP*: `{tp}` | *SL*: `{sl}`
-• *Time*: `{timestamp}`
-
-✅ _Forwarded by AI Core_
-"""
-
-    # Send to Telegram
-    send_telegram_message(message)
-
-    # Optional logging
-    save_trade_to_log(data)
-
-    return jsonify({"status": "forwarded to Telegram"}), 200
