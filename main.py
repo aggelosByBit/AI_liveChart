@@ -20,6 +20,19 @@ AI_TIMEOUT = 5
 def index():
     return "✅ Nova AI Webhook (Render) is live."
 
+# === FINAL ENDPOINT ===
+@app.route("/final", methods=["POST"])
+def final():
+    try:
+        data = request.get_json()
+        print("✅ FINAL Signal Received:", data)
+
+        # You can forward to Telegram here if needed
+        return jsonify({"status": "received by final endpoint"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # === MAIN WEBHOOK ENDPOINT ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
