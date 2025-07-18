@@ -121,3 +121,40 @@ def save_trade_to_log(trade_data):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+    
+# === FINAL FORWARD ENDPOINT (for AI-approved signals) ===
+@app.route('/final', methods=['POST'])
+def final_telegram_forward():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data received'}), 400
+
+    # Extract and format message
+    symbol = data.get("symbol", "Unknown")
+    signal_type = data.get("type", "Unknown").upper()
+    confidence = data.get("confidence", "N/A")
+    price = data.get("price", "N/A")
+    tp = data.get("TP", "N/A")
+    sl = data.get("SL", "N/A")
+    timestamp = data.get("timestamp", "Unknown")
+
+    message = f"""
+📉 *Nova AI Verified Signal*
+
+• *Symbol*: `{symbol}`
+• *Type*: *{signal_type}*
+• *Confidence*: *{confidence}*
+• *Entry Price*: `${price}`
+• *TP*: `{tp}` | *SL*: `{sl}`
+• *Time*: `{timestamp}`
+
+✅ _Forwarded by AI Core_
+"""
+
+    # Send to Telegram
+    send_telegram_message(message)
+
+    # Optional logging
+    save_trade_to_log(data)
+
+    return jsonify({"status": "forwarded to Telegram"}), 200
