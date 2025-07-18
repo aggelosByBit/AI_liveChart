@@ -12,7 +12,7 @@ BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
 
 # === AI BRAIN SETTINGS ===
-AI_BRAIN_URL = "https://1d901c6e-e756-47a9-a5c5-98809de105a7-00-3supnbl570r0e.janeway.replit.dev/webhook"
+AI_BRAIN_URL = "AI_BRAIN_URL = "https://novabrain.replit.app/webhook"
 AI_TIMEOUT = 10  # ⬅ increased to give Replit more time
 
 # === ROOT ENDPOINT ===
