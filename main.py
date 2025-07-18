@@ -3,7 +3,7 @@ import requests
 import os
 import json
 from datetime import datetime
-from logger import log_signal  # Import the logger
+from logger import log_signal  # Local logger
 
 app = Flask(__name__)
 
@@ -11,12 +11,12 @@ app = Flask(__name__)
 BOT_TOKEN = "7832911275:AAGqXqBScHOOMyBf8yxSmJmPxenzEBhpFNo"
 CHAT_ID = "-1002526774762"
 
-# === ROOT ENDPOINT TO AVOID 404 ON RENDER ===
+# === ROOT ENDPOINT (health check) ===
 @app.route('/')
 def index():
     return "✅ Nova AI Webhook is running."
 
-# === WEBHOOK ENDPOINT TO RECEIVE ALERTS ===
+# === WEBHOOK: Receives signal from TradingView ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -25,7 +25,25 @@ def webhook():
 
     print("✅ Received Webhook Data:", data)
 
-    # === Extract and sanitize data ===
+    # === STEP 1: Forward to AI Brain ===
+    try:
+        ai_response = requests.post(
+            "https://1d901c6e-e756-47a9-a5c5-98809de105a7-00-3supnbl570r0e.janeway.replit.dev/webhook",
+            json=data,
+            timeout=5
+        )
+        ai_json = ai_response.json()
+        print("🧠 AI Response:", ai_json)
+    except Exception as e:
+        print("❌ Failed to connect to AI Brain:", e)
+        return jsonify({"error": "AI Brain unreachable"}), 502
+
+    # === STEP 2: Check AI Decision ===
+    if ai_json.get("final_decision") != "forwarded":
+        print("❌ Signal rejected by AI Brain.")
+        return jsonify({"status": "rejected by AI"}), 200
+
+    # === STEP 3: Extract + Sanitize Data ===
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "0%")
@@ -33,26 +51,16 @@ def webhook():
     tp = data.get("TP", "0.8%")
     sl = data.get("SL", "0.5%")
 
-    # === Safe timestamp formatting ===
+    # === Format Timestamp ===
     raw_timestamp = data.get("timestamp")
     try:
-        if raw_timestamp:
-            dt = datetime.fromisoformat(raw_timestamp)
-        else:
-            dt = datetime.utcnow()
+        dt = datetime.fromisoformat(raw_timestamp) if raw_timestamp else datetime.utcnow()
     except:
         dt = datetime.utcnow()
     timestamp = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # === Validate confidence threshold ===
-    try:
-        confidence_value = float(confidence.replace('%', '').strip())
-    except:
-        confidence_value = 0
-
-    # === Build Telegram Message ===
-    if confidence_value >= 80:
-        message = f"""
+    # === STEP 4: Send to Telegram ===
+    message = f"""
 📉 *New Signal From Nova AI*
 
 • *Symbol*: `{symbol}`
@@ -62,26 +70,24 @@ def webhook():
 • *TP*: `{tp}` | *SL*: `{sl}`
 • *Time*: `{timestamp}`
 
-🧠 _Signal accepted by Nova Core (≥80% confidence)_
+🧠 _Signal approved by AI Core_
 """
-        send_telegram_message(message)
+    send_telegram_message(message)
 
-        # === Save to log (console via log_signal)
-        save_trade_to_log({
-            "symbol": symbol,
-            "type": signal_type,
-            "confidence": confidence,
-            "price": price,
-            "tp": tp,
-            "sl": sl,
-            "timestamp": timestamp
-        })
-    else:
-        print("❌ Signal rejected (below confidence threshold)")
+    # === STEP 5: Log It ===
+    save_trade_to_log({
+        "symbol": symbol,
+        "type": signal_type,
+        "confidence": confidence,
+        "price": price,
+        "tp": tp,
+        "sl": sl,
+        "timestamp": timestamp
+    })
 
-    return jsonify({'status': 'ok'}), 200
+    return jsonify({"status": "forwarded by AI"}), 200
 
-# === FUNCTION TO SEND MESSAGE TO TELEGRAM ===
+# === SEND TO TELEGRAM ===
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
@@ -94,9 +100,9 @@ def send_telegram_message(message):
         print("✅ Telegram response:", response.status_code, response.text)
         return response.json()
     except Exception as e:
-        print("Telegram error:", e)
+        print("❌ Telegram error:", e)
 
-# === FUNCTION TO LOG TRADES (Render-friendly) ===
+# === LOG SIGNAL ===
 def save_trade_to_log(trade_data):
     try:
         log_signal({
