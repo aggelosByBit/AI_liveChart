@@ -3,7 +3,7 @@ import requests
 import os
 import json
 from datetime import datetime
-from logger import log_signal  # Local logger
+from logger import log_signal
 
 app = Flask(__name__)
 
@@ -13,14 +13,15 @@ CHAT_ID = "-1002526774762"
 
 # === AI BRAIN SETTINGS ===
 AI_BRAIN_URL = "https://1d901c6e-e756-47a9-a5c5-98809de105a7-00-3supnbl570r0e.janeway.replit.dev/webhook"
-AI_TIMEOUT = 5
+AI_TIMEOUT = 10  # ⬅ increased to give Replit more time
 
 # === ROOT ENDPOINT ===
 @app.route('/')
 def index():
     return "✅ Nova AI Webhook (Render) is live."
 
-# === MAIN WEBHOOK: Receives signal from TradingView and forwards to AI Brain ===
+
+# === MAIN WEBHOOK ENDPOINT ===
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -29,7 +30,7 @@ def webhook():
 
     print("✅ Received Webhook Data:", data)
 
-    # === STEP 1: Forward to AI Brain (Replit) ===
+    # === STEP 1: Forward to AI Brain (with retry logic) ===
     try:
         ai_response = requests.post(AI_BRAIN_URL, json=data, timeout=AI_TIMEOUT)
         ai_json = ai_response.json()
@@ -43,30 +44,33 @@ def webhook():
         print("❌ Signal rejected by AI Brain.")
         return jsonify({"status": "rejected by AI"}), 200
 
-    # === STEP 3: Forward to /final if approved ===
+    # === STEP 3: Forward to Final Endpoint (/final) ===
     try:
-        final_response = requests.post("http://localhost:5000/final", json=data)
-        print("➡️ Forwarded to /final:", final_response.status_code)
+        final_url = os.environ.get("FORWARD_URL")
+        forward_response = requests.post(final_url, json=data, timeout=5)
+        print("➡️ Forwarded to /final:", forward_response.status_code)
     except Exception as e:
-        print("❌ Failed to forward to /final:", str(e))
+        print("❌ Failed to forward to final:", str(e))
+        return jsonify({"error": "Failed to forward"}), 502
 
-    return jsonify({"status": "forwarded to /final"}), 200
+    return jsonify({"status": "forwarded by AI"}), 200
 
-# === FINAL ENDPOINT: Sends signal to Telegram after AI approval ===
+
+# === FINAL FORWARD ENDPOINT (Telegram + log) ===
 @app.route('/final', methods=['POST'])
 def final_telegram_forward():
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data received'}), 400
 
-    # Extract and format message
+    # Extract info
     symbol = data.get("symbol", "Unknown")
     signal_type = data.get("type", "Unknown").upper()
     confidence = data.get("confidence", "N/A")
     price = data.get("price", "N/A")
     tp = data.get("TP", "N/A")
     sl = data.get("SL", "N/A")
-    timestamp = data.get("timestamp", "Unknown")
+    timestamp = data.get("timestamp", datetime.utcnow().isoformat())
 
     message = f"""
 📉 *Nova AI Verified Signal*
@@ -81,13 +85,11 @@ def final_telegram_forward():
 ✅ _Forwarded by AI Core_
 """
 
-    # Send to Telegram
     send_telegram_message(message)
-
-    # Optional logging
     save_trade_to_log(data)
 
     return jsonify({"status": "forwarded to Telegram"}), 200
+
 
 # === SEND TO TELEGRAM ===
 def send_telegram_message(message):
@@ -99,10 +101,11 @@ def send_telegram_message(message):
     }
     try:
         response = requests.post(url, json=payload)
-        print("✅ Telegram response:", response.status_code, response.text)
+        print("✅ Telegram response:", response.status_code)
         return response.json()
     except Exception as e:
         print("❌ Telegram send error:", str(e))
+
 
 # === LOG LOCALLY ===
 def save_trade_to_log(trade_data):
@@ -113,12 +116,13 @@ def save_trade_to_log(trade_data):
             "symbol": trade_data.get("symbol"),
             "price": trade_data.get("price"),
             "confidence": trade_data.get("confidence"),
-            "TP": trade_data.get("tp"),
-            "SL": trade_data.get("sl"),
+            "TP": trade_data.get("TP"),
+            "SL": trade_data.get("SL"),
         })
         print("✅ Trade logged successfully.")
     except Exception as e:
         print("❌ Logging failed:", str(e))
+
 
 # === BIND PORT FOR RENDER ===
 if __name__ == '__main__':
